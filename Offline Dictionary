@@ -1,0 +1,121 @@
+import streamlit as st
+import json
+import difflib
+from gtts import gTTS
+import base64
+import os
+
+st.set_page_config(page_title="Aap Worldwide 🌍", layout="wide")
+
+# ------------------ SAMPLE OFFLINE DATA ------------------
+# You can expand this later
+DATA = {
+    "en": {
+        "hello": {"ur": "سلام", "hi": "नमस्ते", "definition": "A greeting"},
+        "book": {"ur": "کتاب", "hi": "किताब", "definition": "A written work"},
+        "water": {"ur": "پانی", "hi": "पानी", "definition": "Liquid essential for life"}
+    },
+    "ur": {
+        "سلام": {"en": "hello"},
+        "کتاب": {"en": "book"},
+        "پانی": {"en": "water"}
+    }
+}
+
+# ------------------ FUNCTIONS ------------------
+
+def search_word(query, lang):
+    words = list(DATA.get(lang, {}).keys())
+    
+    if query in words:
+        return [query]
+    
+    # Fuzzy match
+    matches = difflib.get_close_matches(query, words, n=5, cutoff=0.3)
+    return matches
+
+
+def text_to_speech(text, lang="en"):
+    try:
+        tts = gTTS(text=text, lang=lang)
+        filename = "temp.mp3"
+        tts.save(filename)
+
+        audio_file = open(filename, "rb")
+        audio_bytes = audio_file.read()
+        st.audio(audio_bytes, format="audio/mp3")
+
+    except:
+        st.warning("TTS not supported for this language")
+
+
+# ------------------ UI ------------------
+
+st.markdown("""
+<h1 style='text-align:center;'>🌍 Aap Worldwide Dictionary</h1>
+""", unsafe_allow_html=True)
+
+# Language selection
+col1, col2 = st.columns(2)
+with col1:
+    src_lang = st.selectbox("From Language", ["en", "ur", "hi"])
+with col2:
+    tgt_lang = st.selectbox("To Language", ["ur", "en", "hi"])
+
+query = st.text_input("🔍 Search word")
+
+# ------------------ SEARCH ------------------
+
+if query:
+    results = search_word(query.lower(), src_lang)
+
+    if results:
+        for word in results:
+            data = DATA[src_lang].get(word, {})
+
+            st.markdown(f"## 📖 {word}")
+
+            if tgt_lang in data:
+                st.success(f"➡ {data[tgt_lang]}")
+
+            if "definition" in data:
+                st.info(f"📘 {data['definition']}")
+
+            # TTS
+            if st.button(f"🔊 Speak {word}"):
+                text_to_speech(word, src_lang)
+
+            st.markdown("---")
+
+    else:
+        st.error("No results found ❌")
+
+# ------------------ FAVORITES ------------------
+
+if "favorites" not in st.session_state:
+    st.session_state.favorites = []
+
+if query:
+    if st.button("❤️ Add to Favorites"):
+        st.session_state.favorites.append(query)
+
+st.sidebar.title("⭐ Favorites")
+for fav in st.session_state.favorites:
+    st.sidebar.write(fav)
+
+# ------------------ FLASHCARDS ------------------
+
+st.sidebar.title("🧠 Flashcards")
+
+if st.sidebar.button("Start Quiz"):
+    import random
+    word = random.choice(list(DATA["en"].keys()))
+    st.sidebar.write(f"Word: {word}")
+    answer = st.sidebar.text_input("Your answer")
+    
+    if answer:
+        correct = DATA["en"][word]["ur"]
+        if answer == correct:
+            st.sidebar.success("Correct ✅")
+        else:
+            st.sidebar.error(f"Wrong ❌ Correct: {correct}")
